@@ -1,0 +1,6 @@
+{
+  "name": "App Control Admin",
+  "description": "Admin Control Panel & Secondary App Cloner Studio with Remote Updates, Popup Customizer, and Offline Shield.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
