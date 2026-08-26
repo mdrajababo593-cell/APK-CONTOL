@@ -55,6 +55,8 @@ class MainActivity : ComponentActivity() {
                 val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
                 val activeSecondaryLaunch by viewModel.activeSecondaryLaunch.collectAsStateWithLifecycle()
                 val isTamperSimulated by viewModel.isTamperViolationSimulated.collectAsStateWithLifecycle()
+                val isCloningInProgress by viewModel.isCloningInProgress.collectAsStateWithLifecycle()
+                val lastExportResult by viewModel.lastExportResult.collectAsStateWithLifecycle()
                 val feedbackMessage by viewModel.feedbackMessage.collectAsStateWithLifecycle()
                 val activityLogs by viewModel.activityLogs.collectAsStateWithLifecycle()
 
@@ -141,6 +143,7 @@ class MainActivity : ComponentActivity() {
                                     AppAdminDetailScreen(
                                         app = currentApp,
                                         popupConfig = selectedPopupConfig,
+                                        isCloningInProgress = isCloningInProgress,
                                         onBack = { currentScreen = Screen.DASHBOARD },
                                         onUpdateStatus = { status ->
                                             viewModel.updateAppStatus(currentApp.id, currentApp.secondaryName, status)
@@ -169,6 +172,9 @@ class MainActivity : ComponentActivity() {
                                         onLaunchSecondaryApp = {
                                             viewModel.startSecondaryAppRun(currentApp)
                                             currentScreen = Screen.SECONDARY_SANDBOX
+                                        },
+                                        onExportDownloadApk = {
+                                            viewModel.exportAndDownloadApk(currentApp)
                                         },
                                         onDeleteApp = {
                                             viewModel.deleteManagedApp(currentApp.id, currentApp.secondaryName)

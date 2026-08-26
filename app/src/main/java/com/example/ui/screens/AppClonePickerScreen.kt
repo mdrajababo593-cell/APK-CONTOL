@@ -62,7 +62,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.scanner.InstalledAppInfo
+import com.example.ui.components.AppIconImage
+import com.example.ui.theme.CyanAccent
 import com.example.ui.theme.ElectricIndigo
+import com.example.ui.theme.EmeraldActive
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,13 +96,13 @@ fun AppClonePickerScreen(
                 title = {
                     Column {
                         Text(
-                            text = "অ্যাপ সিলেক্ট ও ক্লোন করুন",
+                            text = "ফোনের সকল অ্যাপ (ক্লোন ও APK)",
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
                         )
                         Text(
-                            text = "ডিভাইসের যে কোনো অ্যাপকে সেকেন্ডারি করুন",
-                            fontSize = 12.sp,
+                            text = "যেকোনো অ্যাপ সিলেক্ট করে সেকেন্ডারি ক্লোন APK ডাউনলোড করুন",
+                            fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -132,9 +135,9 @@ fun AppClonePickerScreen(
                 onValueChange = { searchQuery = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp)
+                    .padding(vertical = 10.dp)
                     .testTag("app_search_field"),
-                placeholder = { Text("অ্যাপের নাম বা প্যাকেজ দিয়ে খুঁজুন...") },
+                placeholder = { Text("অ্যাপের নাম বা প্যাকেজ লিখে খুঁজুন...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -152,33 +155,47 @@ fun AppClonePickerScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 16.dp),
+                        .padding(vertical = 12.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "ডিভাইসের অ্যাপ স্ক্যান করা হচ্ছে...",
-                        fontSize = 13.sp,
+                        text = "ফোনের অ্যাপ স্ক্যান ও প্যাকেজ বিশ্লেষণ করা হচ্ছে...",
+                        fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
             // Results count
-            Text(
-                text = "${filteredApps.size} টি অ্যাপ পাওয়া গেছে",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${filteredApps.size} টি অ্যাপ পাওয়া গেছে",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "আইকন ও সাইজ সহ প্রস্তুত",
+                    fontSize = 11.sp,
+                    color = EmeraldActive,
+                    fontWeight = FontWeight.Medium
+                )
+            }
 
             // App list
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)
             ) {
                 items(filteredApps, key = { it.packageName }) { appInfo ->
                     AppPickerCard(
@@ -226,35 +243,24 @@ fun AppPickerCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = CardDefaults.outlinedCardBorder().copy(
             brush = Brush.horizontalGradient(
-                listOf(themeColor.copy(alpha = 0.3f), MaterialTheme.colorScheme.outlineVariant)
+                listOf(themeColor.copy(alpha = 0.35f), MaterialTheme.colorScheme.outlineVariant)
             )
         )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // App Avatar / Initial
-            Box(
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(themeColor, themeColor.copy(alpha = 0.7f))
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = appInfo.appName.take(1).uppercase(),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
-                )
-            }
+            // High-Resolution App Icon
+            AppIconImage(
+                icon = appInfo.icon,
+                appName = appInfo.appName,
+                primaryColorHex = appInfo.primaryColorHex,
+                size = 50.dp,
+                cornerRadius = 14.dp
+            )
 
             Spacer(modifier = Modifier.width(14.dp))
 
@@ -269,16 +275,33 @@ fun AppPickerCard(
                 )
                 Text(
                     text = appInfo.packageName,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Row(modifier = Modifier.padding(top = 2.dp)) {
+                Row(
+                    modifier = Modifier.padding(top = 3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = themeColor.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = "v${appInfo.versionName}",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = themeColor,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                     Text(
-                        text = "v${appInfo.versionName} • ${appInfo.category}",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        text = "• ${appInfo.apkSizeFormatted}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -288,7 +311,7 @@ fun AppPickerCard(
                 onClick = onSelect,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = themeColor),
-                modifier = Modifier.height(38.dp)
+                modifier = Modifier.height(40.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.ContentCopy,
@@ -296,7 +319,7 @@ fun AppPickerCard(
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("ক্লোন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("ক্লোন করুন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -338,37 +361,54 @@ fun CloneConfigBottomSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(themeColor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = appInfo.appName.take(1).uppercase(),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
-                }
+                AppIconImage(
+                    icon = appInfo.icon,
+                    appName = appInfo.appName,
+                    primaryColorHex = appInfo.primaryColorHex,
+                    size = 48.dp,
+                    cornerRadius = 14.dp
+                )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "সেকেন্ডারি ক্লোন তৈরি করুন",
+                        text = "ক্লোন APK তৈরি ও ডাউনলোড",
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "প্যাকেজ: ${appInfo.packageName}",
+                        text = "${appInfo.appName} • ${appInfo.apkSizeFormatted}",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Highlight info box
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "📥 ফোন স্টোরেজে সেভ হবে:",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "এই অ্যাপটি সিলেক্ট করলে মূল APK থেকে একটি সেকেন্ডারি ক্লোন APK আপনার ফোনের Downloads ফোল্ডারে সেভ হবে। এরপর আপনি সরাসরি ইনস্টল করতে বা যাকে ইচ্ছা পাঠাতে পারবেন।",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Secondary Name field
             Text(
@@ -384,12 +424,12 @@ fun CloneConfigBottomSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("secondary_name_input"),
-                placeholder = { Text("যেমন: ${appInfo.appName} Twin") },
+                placeholder = { Text("যেমন: ${appInfo.appName} Pro") },
                 shape = RoundedCornerShape(14.dp),
                 singleLine = true
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Offline Guard Option Card
             Card(
@@ -423,14 +463,14 @@ fun CloneConfigBottomSheet(
                         Text(
                             text = "অফলাইন ব্লক সুরক্ষা (Offline Shield)",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "চালু থাকলে ইন্টারনেট ছাড়া কেউ এই অ্যাপে ঢুকতে পারবে না।",
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            lineHeight = 16.sp
+                            lineHeight = 15.sp
                         )
                     }
                     Switch(
@@ -445,16 +485,16 @@ fun CloneConfigBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Confirm Button
             Button(
                 onClick = { onConfirm(secondaryCustomName, isOfflineBlocked) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
+                    .height(52.dp)
                     .testTag("confirm_clone_button"),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = themeColor,
                     contentColor = Color.White
@@ -463,7 +503,7 @@ fun CloneConfigBottomSheet(
                 Icon(Icons.Default.Check, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "ক্লোন ও অ্যাডমিন কন্ট্রোলে যোগ করুন",
+                    text = "ক্লোন ও APK ডাউনলোড করুন",
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )

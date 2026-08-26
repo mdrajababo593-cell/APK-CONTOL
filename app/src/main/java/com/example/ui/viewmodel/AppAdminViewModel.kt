@@ -45,6 +45,13 @@ class AppAdminViewModel(application: Application) : AndroidViewModel(application
     private val _activeSecondaryLaunch = MutableStateFlow<Pair<ManagedAppEntity, PopupConfigEntity?>?>(null)
     val activeSecondaryLaunch: StateFlow<Pair<ManagedAppEntity, PopupConfigEntity?>?> = _activeSecondaryLaunch.asStateFlow()
 
+    // Cloning & APK Export Progress State
+    private val _isCloningInProgress = MutableStateFlow(false)
+    val isCloningInProgress: StateFlow<Boolean> = _isCloningInProgress.asStateFlow()
+
+    private val _lastExportResult = MutableStateFlow<com.example.util.ApkClonerExtractorHelper.ExportResult?>(null)
+    val lastExportResult: StateFlow<com.example.util.ApkClonerExtractorHelper.ExportResult?> = _lastExportResult.asStateFlow()
+
     // Simulated Tamper Flag for testing Anti-Tamper Lockdown in Sandbox
     private val _isTamperViolationSimulated = MutableStateFlow(false)
     val isTamperViolationSimulated: StateFlow<Boolean> = _isTamperViolationSimulated.asStateFlow()
@@ -76,7 +83,10 @@ class AppAdminViewModel(application: Application) : AndroidViewModel(application
             }
         }
 
-        // Initial scan of installed apps
+        // Initial scan of installed apps and seed if first launch
+        viewModelScope.launch {
+            repository.seedInitialAppsIfEmpty()
+        }
         scanInstalledApps()
     }
 
@@ -102,32 +112,84 @@ class AppAdminViewModel(application: Application) : AndroidViewModel(application
         initialStatus: String = "ACTIVE"
     ) {
         viewModelScope.launch {
-            val fingerprint = AntiTamperGuard.generateSecurityFingerprint(
-                installedApp.packageName,
-                installedApp.versionCode
-            )
-            val entity = ManagedAppEntity(
-                packageName = installedApp.packageName,
-                appName = installedApp.appName,
-                secondaryName = secondaryCustomName.ifBlank { "${installedApp.appName} (Clone)" },
-                versionName = installedApp.versionName,
-                versionCode = installedApp.versionCode,
-                status = initialStatus,
-                isOfflineBlocked = isOfflineBlocked,
-                isAntiTamperProtected = isAntiTamperProtected,
-                securityFingerprint = fingerprint,
-                isDexIntegrityLocked = isAntiTamperProtected,
-                themeColorHex = installedApp.primaryColorHex,
-                appCategory = installedApp.category
-            )
-            val newId = repository.createOrUpdateApp(entity)
-            _feedbackMessage.value = "‘${entity.secondaryName}’ সফলভাবে এন্টি-টেম্পার সিল সহ সেকেন্ডারি অ্যাপ হিসেবে তৈরি হয়েছে!"
-            val created = repository.getAppById(newId)
-            _selectedApp.value = created
-            if (created != null) {
-                loadPopupConfigForApp(created.id)
+            _isCloningInProgress.value = true
+            try {
+                val customName = secondaryCustomName.ifBlank { "${installedApp.appName} (Clone)" }
+                
+                // 1. Perform actual APK clone extraction & save directly to Downloads
+                val exportResult = com.example.util.ApkClonerExtractorHelper.cloneAndExportApk(
+                    context = getApplication(),
+                    appInfo = installedApp,
+                    customName = customName
+                )
+                _lastExportResult.value = exportResult
+
+                val fingerprint = AntiTamperGuard.generateSecurityFingerprint(
+                    installedApp.packageName,
+                    installedApp.versionCode
+                )
+                val entity = ManagedAppEntity(
+                    packageName = installedApp.packageName,
+                    appName = installedApp.appName,
+                    secondaryName = customName,
+                    versionName = installedApp.versionName,
+                    versionCode = installedApp.versionCode,
+                    status = initialStatus,
+                    isOfflineBlocked = isOfflineBlocked,
+                    isAntiTamperProtected = isAntiTamperProtected,
+                    securityFingerprint = fingerprint,
+                    isDexIntegrityLocked = isAntiTamperProtected,
+                    themeColorHex = installedApp.primaryColorHex,
+                    appCategory = installedApp.category,
+                    sourceApkPath = installedApp.sourceApkPath,
+                    extractedApkPath = exportResult.filePath,
+                    apkSizeFormatted = exportResult.fileSizeFormatted.ifBlank { installedApp.apkSizeFormatted }
+                )
+                val newId = repository.createOrUpdateApp(entity)
+                _feedbackMessage.value = exportResult.message
+                val created = repository.getAppById(newId)
+                _selectedApp.value = created
+                if (created != null) {
+                    loadPopupConfigForApp(created.id)
+                }
+            } catch (e: Exception) {
+                _feedbackMessage.value = "ক্লোন করতে সমস্যা হয়েছে: ${e.message}"
+            } finally {
+                _isCloningInProgress.value = false
             }
         }
+    }
+
+    fun exportAndDownloadApk(app: ManagedAppEntity) {
+        viewModelScope.launch {
+            _isCloningInProgress.value = true
+            try {
+                val installedInfo = InstalledAppInfo(
+                    packageName = app.packageName,
+                    appName = app.appName,
+                    versionName = app.versionName,
+                    versionCode = app.versionCode,
+                    isSystemApp = false,
+                    sourceApkPath = app.sourceApkPath,
+                    primaryColorHex = app.themeColorHex
+                )
+                val exportResult = com.example.util.ApkClonerExtractorHelper.cloneAndExportApk(
+                    context = getApplication(),
+                    appInfo = installedInfo,
+                    customName = app.secondaryName
+                )
+                _lastExportResult.value = exportResult
+                _feedbackMessage.value = exportResult.message
+            } catch (e: Exception) {
+                _feedbackMessage.value = "APK এক্সপোর্ট ও ডাউনলোড করতে সমস্যা হয়েছে: ${e.message}"
+            } finally {
+                _isCloningInProgress.value = false
+            }
+        }
+    }
+
+    fun clearExportResult() {
+        _lastExportResult.value = null
     }
 
     fun selectApp(app: ManagedAppEntity) {

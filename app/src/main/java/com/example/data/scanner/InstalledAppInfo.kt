@@ -10,5 +10,7 @@ data class InstalledAppInfo(
     val isSystemApp: Boolean,
     val icon: Drawable? = null,
     val category: String = "App",
-    val primaryColorHex: String = "#6366F1"
+    val primaryColorHex: String = "#6366F1",
+    val sourceApkPath: String? = null,
+    val apkSizeFormatted: String = "15.4 MB"
 )

@@ -29,7 +29,9 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GetApp
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Security
@@ -45,6 +47,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -78,6 +81,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ManagedAppEntity
@@ -96,6 +100,7 @@ import java.util.Locale
 fun AppAdminDetailScreen(
     app: ManagedAppEntity,
     popupConfig: PopupConfigEntity?,
+    isCloningInProgress: Boolean = false,
     onBack: () -> Unit,
     onUpdateStatus: (String) -> Unit,
     onToggleOfflineShield: (Boolean) -> Unit,
@@ -103,6 +108,7 @@ fun AppAdminDetailScreen(
     onPushScheduledUpdate: (version: String, url: String, changelog: String, isScheduled: Boolean, scheduledTimestamp: Long, scheduleLabel: String) -> Unit,
     onSavePopupConfig: (PopupConfigEntity) -> Unit,
     onLaunchSecondaryApp: () -> Unit,
+    onExportDownloadApk: () -> Unit = {},
     onDeleteApp: () -> Unit
 ) {
     val context = LocalContext.current
@@ -144,16 +150,21 @@ fun AppAdminDetailScreen(
                 actions = {
                     IconButton(
                         onClick = {
-                            val shareText = """
-                                🚀 App: ${app.secondaryName} (${app.packageName})
-                                📌 Version: ${app.versionName}
-                                🛡️ Anti-Tamper Shield: ${if (app.isAntiTamperProtected) "ACTIVE (SHA-256 Locked)" else "Disabled"}
-                                🌐 Offline Shield: ${if (app.isOfflineBlocked) "Active" else "Disabled"}
-                                ⚡ Status: ${app.status}
-                                🔑 Security Hash: ${app.securityFingerprint}
-                                🔗 Update Link: ${popupConfig?.primaryBtnUrl ?: "N/A"}
-                            """.trimIndent()
-                            AppLauncherHelper.shareConfigText(context, shareText, "App Config: ${app.secondaryName}")
+                            val apkFile = app.extractedApkPath?.let { java.io.File(it) }
+                            if (apkFile != null && apkFile.exists()) {
+                                com.example.util.ApkClonerExtractorHelper.shareApkFile(context, apkFile, app.secondaryName)
+                            } else {
+                                val shareText = """
+                                    🚀 App: ${app.secondaryName} (${app.packageName})
+                                    📌 Version: ${app.versionName}
+                                    🛡️ Anti-Tamper Shield: ${if (app.isAntiTamperProtected) "ACTIVE (SHA-256 Locked)" else "Disabled"}
+                                    🌐 Offline Shield: ${if (app.isOfflineBlocked) "Active" else "Disabled"}
+                                    ⚡ Status: ${app.status}
+                                    🔑 Security Hash: ${app.securityFingerprint}
+                                    🔗 Update Link: ${popupConfig?.primaryBtnUrl ?: "N/A"}
+                                """.trimIndent()
+                                AppLauncherHelper.shareConfigText(context, shareText, "App Config: ${app.secondaryName}")
+                            }
                         },
                         modifier = Modifier.testTag("share_config_btn")
                     ) {
@@ -200,12 +211,14 @@ fun AppAdminDetailScreen(
                     app = app,
                     popupConfig = popupConfig,
                     themeColor = themeColor,
+                    isCloningInProgress = isCloningInProgress,
                     onUpdateStatus = onUpdateStatus,
                     onToggleOfflineShield = onToggleOfflineShield,
                     onToggleAntiTamper = onToggleAntiTamper,
                     onOpenPushUpdateDialog = { showPushUpdateDialog = true },
                     onOpenSecurityCert = { showSecurityCertDialog = true },
                     onLaunchSecondaryApp = onLaunchSecondaryApp,
+                    onExportDownloadApk = onExportDownloadApk,
                     onSwitchToDesigner = { selectedTab = 1 }
                 )
             } else {
@@ -318,14 +331,22 @@ fun MainControlTabContent(
     app: ManagedAppEntity,
     popupConfig: PopupConfigEntity?,
     themeColor: Color,
+    isCloningInProgress: Boolean = false,
     onUpdateStatus: (String) -> Unit,
     onToggleOfflineShield: (Boolean) -> Unit,
     onToggleAntiTamper: (Boolean) -> Unit,
     onOpenPushUpdateDialog: () -> Unit,
     onOpenSecurityCert: () -> Unit,
     onLaunchSecondaryApp: () -> Unit,
+    onExportDownloadApk: () -> Unit,
     onSwitchToDesigner: () -> Unit
 ) {
+    val context = LocalContext.current
+    val extractedFile = remember(app.extractedApkPath) {
+        app.extractedApkPath?.let { java.io.File(it) }
+    }
+    val hasExtractedApk = extractedFile != null && extractedFile.exists()
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -380,10 +401,165 @@ fun MainControlTabContent(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "মূল সংস্করণ: v${app.versionName} • মোট লঞ্চ: ${app.totalLaunches} বার",
+                            text = "মূল সংস্করণ: v${app.versionName} • সাইজ: ${app.apkSizeFormatted.ifEmpty { "প্রস্তুত" }}",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                         )
+                    }
+                }
+            }
+        }
+
+        // APK Download, Direct Install & Share Section (CRITICAL USER REQUEST)
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.25f)
+                ),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = Brush.linearGradient(
+                        listOf(CyanAccent, ElectricIndigo)
+                    ),
+                    width = 1.5.dp
+                )
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(CyanAccent.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GetApp,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "ক্লোন APK ডাউনলোড ও ডিস্ট্রিবিউশন",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (hasExtractedApk) "APK ফাইল ফোনে ডাউনলোড ফোল্ডারে প্রস্তুত আছে"
+                                else "ফোনে ইনস্টল বা অন্যকে পাঠাতে এখনই APK ডাউনলোড করুন",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    if (isCloningInProgress) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "APK এক্সট্র্যাক্ট ও ডাউনলোড প্রসেস চলছে...",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    } else {
+                        // Action Buttons Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Download / Export Button
+                            Button(
+                                onClick = onExportDownloadApk,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp)
+                                    .testTag("download_apk_btn"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Icon(Icons.Default.GetApp, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (hasExtractedApk) "পুনরায় ডাউনলোড" else "APK ডাউনলোড",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            // Direct Install Button
+                            if (hasExtractedApk && extractedFile != null) {
+                                Button(
+                                    onClick = {
+                                        com.example.util.ApkClonerExtractorHelper.installApk(context, extractedFile)
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                        .testTag("direct_install_apk_btn"),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = EmeraldActive,
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Icon(Icons.Default.PhoneAndroid, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("ফোনে ইনস্টল", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                // Share Button
+                                OutlinedButton(
+                                    onClick = {
+                                        com.example.util.ApkClonerExtractorHelper.shareApkFile(context, extractedFile, app.secondaryName)
+                                    },
+                                    modifier = Modifier
+                                        .weight(0.9f)
+                                        .height(44.dp)
+                                        .testTag("share_apk_file_btn"),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("শেয়ার", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    if (hasExtractedApk && extractedFile != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "📂 লোকেশন: Download/AppControl_Clones/${extractedFile.name}",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }

@@ -210,6 +210,40 @@ class AppRepository(private val appDao: AppDao) {
         )
     }
 
+    suspend fun seedInitialAppsIfEmpty() {
+        val apps = appDao.getManagedAppsDirect()
+        if (apps.isEmpty()) {
+            val sample1 = ManagedAppEntity(
+                packageName = "com.whatsapp",
+                appName = "WhatsApp Messenger",
+                secondaryName = "WhatsApp Pro (Clone)",
+                versionName = "2.24.18",
+                versionCode = 2241801,
+                status = "ACTIVE",
+                isOfflineBlocked = false,
+                isAntiTamperProtected = true,
+                themeColorHex = "#25D366",
+                appCategory = "Communication",
+                apkSizeFormatted = "28.4 MB"
+            )
+            val sample2 = ManagedAppEntity(
+                packageName = "org.telegram.messenger",
+                appName = "Telegram",
+                secondaryName = "Telegram VIP (Clone)",
+                versionName = "10.14.5",
+                versionCode = 1014500,
+                status = "UPDATE_REQUIRED",
+                isOfflineBlocked = true,
+                isAntiTamperProtected = true,
+                themeColorHex = "#0088CC",
+                appCategory = "Social",
+                apkSizeFormatted = "32.1 MB"
+            )
+            createOrUpdateApp(sample1)
+            createOrUpdateApp(sample2)
+        }
+    }
+
     suspend fun clearLogs() {
         appDao.clearAllLogs()
     }

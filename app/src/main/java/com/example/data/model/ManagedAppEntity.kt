@@ -23,6 +23,9 @@ data class ManagedAppEntity(
     val totalLaunches: Int = 0,
     val lastLaunchedAt: Long = 0L,
     val scheduledUpdateTimestamp: Long = 0L, // If scheduled update is active
+    val sourceApkPath: String? = null,
+    val extractedApkPath: String? = null,
+    val apkSizeFormatted: String = "15.4 MB",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val customNotes: String = ""

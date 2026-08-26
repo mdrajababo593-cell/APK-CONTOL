@@ -30,6 +30,9 @@ object InstalledAppScanner {
                 val pkgInfo = pm.getPackageInfo(pkgName, 0)
                 val isSystem = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                 val icon = pm.getApplicationIcon(appInfo)
+                val sourceDir = appInfo.sourceDir ?: appInfo.publicSourceDir
+                val sizeBytes = if (sourceDir != null && java.io.File(sourceDir).exists()) java.io.File(sourceDir).length() else 0L
+                val sizeFormatted = com.example.util.ApkClonerExtractorHelper.formatFileSize(sizeBytes)
                 val versionName = pkgInfo.versionName ?: "1.0"
                 val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
                     pkgInfo.longVersionCode.toInt()
@@ -50,7 +53,9 @@ object InstalledAppScanner {
                         isSystemApp = isSystem,
                         icon = icon,
                         category = if (isSystem) "System" else "User App",
-                        primaryColorHex = colorHex
+                        primaryColorHex = colorHex,
+                        sourceApkPath = sourceDir,
+                        apkSizeFormatted = sizeFormatted
                     )
                 )
             } catch (e: Exception) {

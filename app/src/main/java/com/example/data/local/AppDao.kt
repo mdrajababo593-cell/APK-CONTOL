@@ -17,6 +17,9 @@ interface AppDao {
     @Query("SELECT * FROM managed_apps ORDER BY updatedAt DESC")
     fun getAllManagedApps(): Flow<List<ManagedAppEntity>>
 
+    @Query("SELECT * FROM managed_apps")
+    suspend fun getManagedAppsDirect(): List<ManagedAppEntity>
+
     @Query("SELECT * FROM managed_apps WHERE id = :id LIMIT 1")
     suspend fun getManagedAppById(id: Long): ManagedAppEntity?
 
